@@ -1,0 +1,23 @@
+publish_world_models:
+    ros__parameters:
+        meshes:
+            seafloor:
+                plane: [40., 40., 0.1]
+                pose:
+                    position: [0., 0., -50.]
+            north:
+                plane: [0.1, 40., 50.]
+                pose:
+                    position: [20., 0., -50.]
+            south:
+                plane: [0.1, 40., 50.]
+                pose:
+                    position: [-20., 0., -50.]
+            west:
+                plane: [40., 0.1, 50.]
+                pose:
+                    position: [0., -20., -50.]
+            east:
+                plane: [40., 0.1, 50.]
+                pose:
+                    position: [0., 20., -50.]

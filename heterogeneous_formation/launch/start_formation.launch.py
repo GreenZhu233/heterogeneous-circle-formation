@@ -1,0 +1,60 @@
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+from launch.actions import IncludeLaunchDescription, TimerAction
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+import os
+
+def generate_launch_description():
+    package_name = 'heterogeneous_formation'
+    pkg = FindPackageShare(package_name).find(package_name)
+    ld = LaunchDescription()
+
+    # start gazebo world
+    gazebo_world = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                FindPackageShare('formation_gazebo_worlds').find('formation_gazebo_worlds'),
+                'launch',
+                'heterogeneous_formation_world.launch.py'
+            )
+        )
+    )
+
+    # summon quadrotors
+    summon_quadrotors = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg, 'launch', 'summon_quadrotors.launch.py')
+        )
+    )
+
+    # summon diff_drive_robots
+    summon_diff_drive_robots = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg, 'launch', 'summon_diff_drive_robots.launch.py')
+        )
+    )
+
+    # start quadrotors formation
+    quadrotor_formation = Node(
+        package='quadrotor_formation',
+        executable='circle_formation_node',
+        output='screen',
+        parameters=[{'num_of_quadrotors': 5, 'center_x': 30.0, 'center_y': 5.0, 'center_z': 4.0}]
+    )
+
+    # start diff_drive_robots formation
+    diff_drive_formation = Node(
+        package='diff_drive_formation',
+        executable='circle_formation_node',
+        output='screen',
+        parameters=[{'num_of_robots': 5, 'center_x': 30.0, 'center_y': -5.0}]
+    )
+
+    ld.add_action(gazebo_world)
+    ld.add_action(summon_quadrotors)
+    ld.add_action(summon_diff_drive_robots)
+    ld.add_action(quadrotor_formation)
+    ld.add_action(TimerAction(period=5.0, actions=[diff_drive_formation]))
+
+    return ld
