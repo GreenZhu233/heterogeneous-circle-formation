@@ -1,0 +1,6 @@
+[submodule "quadrotor_formation"]
+	path = quadrotor_formation
+	url = https://github.com/GreenZhu233/quadrotor-circle-formation.git
+[submodule "diff_drive_formation"]
+	path = diff_drive_formation
+	url = https://github.com/GreenZhu233/diff-drive-circle-formation.git
