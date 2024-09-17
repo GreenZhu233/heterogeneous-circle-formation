@@ -21,7 +21,7 @@ def generate_launch_description():
     rand = random.sample(range(x_range * y_range), num_of_robots)
     x = [(num // y_range) + x_min for num in rand]
     y = [(num % y_range) + y_min for num in rand]
-    spawn_position = [[x[i], y[i], 0.0] for i in range(num_of_robots)]
+    spawn_position = [[x[i], y[i], 0.3] for i in range(num_of_robots)]
 
     for i in range(num_of_robots):
         doc = xacro.process_file(xacro_file, mappings={'namespace':'ddrobot_'+str(i)})

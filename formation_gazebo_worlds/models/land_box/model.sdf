@@ -17,7 +17,7 @@
       <self_collide>0</self_collide>
       <enable_wind>0</enable_wind>
       <kinematic>0</kinematic>
-      <pose>20 0 -25 0 -0 0</pose>
+      <pose>20 0 -24.9 0 -0 0</pose>
       <gravity>1</gravity>
       <visual name='visual'>
         <geometry>
@@ -54,8 +54,8 @@
         <surface>
           <friction>
             <ode>
-              <mu>1</mu>
-              <mu2>1</mu2>
+              <mu>100</mu>
+              <mu2>50</mu2>
               <fdir1>0 0 0</fdir1>
               <slip1>0</slip1>
               <slip2>0</slip2>
