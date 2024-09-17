@@ -47,7 +47,7 @@ def generate_launch_description():
 
     ld.add_action(plankton_global_sim_time)
     ld.add_action(start_gazebo_ros)
-    # ld.add_action(world_ned_publisher)
+    ld.add_action(world_ned_publisher)
     ld.add_action(world_model_publisher)
 
     return ld

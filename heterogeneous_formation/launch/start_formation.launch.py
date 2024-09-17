@@ -40,7 +40,7 @@ def generate_launch_description():
         package='quadrotor_formation',
         executable='circle_formation_node',
         output='screen',
-        parameters=[{'num_of_quadrotors': 5, 'center_x': 30.0, 'center_y': 5.0, 'center_z': 4.0}]
+        parameters=[{'num_of_quadrotors': 5, 'center_x': 10.0, 'center_y': 5.0, 'center_z': 4.0}]
     )
 
     # start diff_drive_robots formation
@@ -48,7 +48,7 @@ def generate_launch_description():
         package='diff_drive_formation',
         executable='circle_formation_node',
         output='screen',
-        parameters=[{'num_of_robots': 5, 'center_x': 30.0, 'center_y': -5.0}]
+        parameters=[{'num_of_robots': 5, 'center_x': 10.0, 'center_y': -5.0}]
     )
 
     ld.add_action(gazebo_world)

@@ -12,8 +12,8 @@ def generate_launch_description():
     xacro_file = os.path.join(pkg, 'urdf', 'quadrotor.xacro')
 
     num_of_quadrotors = 5
-    x_min = 25
-    x_max = 40
+    x_min = 5
+    x_max = 20
     x_range = x_max - x_min
     y_min = 0
     y_max = 15

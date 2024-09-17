@@ -12,8 +12,8 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     num_of_robots = 5
-    x_min = 25
-    x_max = 40
+    x_min = 5
+    x_max = 20
     x_range = x_max - x_min
     y_min = -15
     y_max = 0
