@@ -8,16 +8,16 @@ publish_world_models:
             north:
                 plane: [0.1, 40., 50.]
                 pose:
-                    position: [0., 0., -50.]
+                    position: [0., 0., -25.]
             south:
                 plane: [0.1, 40., 50.]
                 pose:
-                    position: [-40., 0., -50.]
+                    position: [-40., 0., -25.]
             west:
                 plane: [40., 0.1, 50.]
                 pose:
-                    position: [-20., -20., -50.]
+                    position: [-20., -20., -25.]
             east:
                 plane: [40., 0.1, 50.]
                 pose:
-                    position: [-20., 20., -50.]
+                    position: [-20., 20., -25.]
