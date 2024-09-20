@@ -1,0 +1,12 @@
+# goal
+float64[] position     # x, y, z position
+bool relative       # If true, the goal position is relative to the current position
+float64 time_limit
+float64 error_tolerance     # The error tolerance for the goal position
+bool turn_off_motors_after_reaching    # If true, the force will be stopped applying after reaching the goal position
+---
+# result
+float64[] final_position
+---
+# feedback
+float64[] current_position
