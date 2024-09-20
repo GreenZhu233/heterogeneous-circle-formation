@@ -15,22 +15,24 @@
 class PositionControlServer: public rclcpp::Node
 {
 public:
-    using PositionControl = formation_interfaces::action::MoveQuad;
-    using GoalHandle = rclcpp_action::ServerGoalHandle<PositionControl>;
+    using MoveQuad = formation_interfaces::action::MoveQuad;
+    using GoalHandle = rclcpp_action::ServerGoalHandle<MoveQuad>;
 
     explicit PositionControlServer(std::string name, const rclcpp::NodeOptions &options = rclcpp::NodeOptions())
     : Node(name, options)
     {
         this->declare_parameter("gravity", 1.316*9.8);
-        this->declare_parameter("odom_topic", "odom");
-        this->declare_parameter("force_topic", "gazebo_ros_force");
+        this->declare_parameter("odom_topic", "/odom");
+        this->declare_parameter("force_topic", "/gazebo_ros_force");
+        this->declare_parameter("action_service_name", "/position_control");
         this->gravity = this->get_parameter("gravity").as_double();
         std::string odom_topic = this->get_parameter("odom_topic").as_string();
         std::string force_topic = this->get_parameter("force_topic").as_string();
+        std::string action_service_name = this->get_parameter("action_service_name").as_string();
         using namespace std::placeholders;
-        this->action_server = rclcpp_action::create_server<PositionControl>(
+        this->action_server = rclcpp_action::create_server<MoveQuad>(
             this,
-            "/position_control",
+            action_service_name,
             std::bind(&PositionControlServer::handle_goal, this, _1, _2),
             std::bind(&PositionControlServer::handle_cancel, this, _1),
             std::bind(&PositionControlServer::handle_accepted, this, _1)
@@ -40,14 +42,14 @@ public:
         rclcpp::SubscriptionOptions sub_options;
         sub_options.callback_group = this->callback_group;
         this->odom_sub = this->create_subscription<nav_msgs::msg::Odometry>(
-            "/" + odom_topic,
+            odom_topic,
             10,
             std::bind(&PositionControlServer::odom_callback, this, _1),
             sub_options
         );
 
         this->force_pub = this->create_publisher<geometry_msgs::msg::Twist>(
-            "/" + force_topic,
+            force_topic,
             10
         );
     }
@@ -56,7 +58,7 @@ private:
     rclcpp::CallbackGroup::SharedPtr callback_group;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr force_pub;
-    rclcpp_action::Server<PositionControl>::SharedPtr action_server;
+    rclcpp_action::Server<MoveQuad>::SharedPtr action_server;
     double gravity;
     double position[3]; std::mutex position_mutex;
     double sim_time; std::mutex sim_time_mutex;
@@ -100,7 +102,7 @@ private:
     }
 
     rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID &uuid,
-                                            std::shared_ptr<const PositionControl::Goal> goal)
+                                            std::shared_ptr<const MoveQuad::Goal> goal)
     {
         if(goal->position.size() != 3)
         {
@@ -135,10 +137,10 @@ private:
     {
         RCLCPP_INFO(this->get_logger(), "Executing goal");
         const auto goal = goal_handle->get_goal();
-        auto feedback = std::make_shared<PositionControl::Feedback>();
+        auto feedback = std::make_shared<MoveQuad::Feedback>();
         auto &current_pos = feedback->current_position;
         current_pos.resize(3);
-        auto result = std::make_shared<PositionControl::Result>();
+        auto result = std::make_shared<MoveQuad::Result>();
         std::vector<double> goal_pos = goal->position;
         double time_limit = goal->time_limit > 0 ? goal->time_limit : 10.0;
         double error_tolerance = goal->error_tolerance > 0 ? goal->error_tolerance : 0.1;
@@ -262,6 +264,7 @@ private:
             sum_error[i] += error[i];
             prev_error[i] = error[i];
         }
+        force[2] += gravity;
         prev_time = time;
     }
 
