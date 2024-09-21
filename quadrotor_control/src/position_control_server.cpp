@@ -4,13 +4,13 @@
 #include "formation_interfaces/action/move_quad.hpp"
 #include "quadrotor_control/visibility_control.h"
 #include "nav_msgs/msg/odometry.hpp"
-#include "geometry_msgs/msg/twist.hpp"
+#include "geometry_msgs/msg/wrench.hpp"
 
 #include <string>
 #include <thread>
 #include <vector>
-#include <mutex>
 #include <cmath>
+#include <atomic>
 
 class PositionControlServer: public rclcpp::Node
 {
@@ -21,11 +21,11 @@ public:
     explicit PositionControlServer(std::string name, const rclcpp::NodeOptions &options = rclcpp::NodeOptions())
     : Node(name, options)
     {
-        this->declare_parameter("gravity", 1.316*9.8);
+        this->declare_parameter("G", 1.316*9.8);
         this->declare_parameter("odom_topic", "/odom");
         this->declare_parameter("force_topic", "/gazebo_ros_force");
         this->declare_parameter("action_service_name", "/position_control");
-        this->gravity = this->get_parameter("gravity").as_double();
+        this->G = this->get_parameter("G").as_double();
         std::string odom_topic = this->get_parameter("odom_topic").as_string();
         std::string force_topic = this->get_parameter("force_topic").as_string();
         std::string action_service_name = this->get_parameter("action_service_name").as_string();
@@ -48,7 +48,7 @@ public:
             sub_options
         );
 
-        this->force_pub = this->create_publisher<geometry_msgs::msg::Twist>(
+        this->force_pub = this->create_publisher<geometry_msgs::msg::Wrench>(
             force_topic,
             10
         );
@@ -57,48 +57,38 @@ public:
 private:
     rclcpp::CallbackGroup::SharedPtr callback_group;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub;
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr force_pub;
+    rclcpp::Publisher<geometry_msgs::msg::Wrench>::SharedPtr force_pub;
     rclcpp_action::Server<MoveQuad>::SharedPtr action_server;
-    double gravity;
-    double position[3]; std::mutex position_mutex;
-    double sim_time; std::mutex sim_time_mutex;
-    double quat[4]; std::mutex quat_mutex;
-    double vel[3]; std::mutex vel_mutex;
-    double angular_vel[3]; std::mutex angular_vel_mutex;
-    std::thread hovering_thread{std::bind(&PositionControlServer::hover, this)};
-    bool hovering = false;
+    double G;
+    std::atomic<double> position[3];
+    std::atomic<double> sim_time;
+    std::atomic<double> quat[4];
+    std::atomic<double> vel[3];
+    std::atomic<double> angular_vel[3];
+    std::unique_ptr<std::thread> hovering_thread;
+    std::atomic<bool> hovering;
 
     void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
     {
-        {
-            std::lock_guard<std::mutex> lock(this->position_mutex);
-            this->position[0] = msg->pose.pose.position.x;
-            this->position[1] = msg->pose.pose.position.y;
-            this->position[2] = msg->pose.pose.position.z;
-        }
-        {
-            std::lock_guard<std::mutex> lock(this->sim_time_mutex);
-            this->sim_time = msg->header.stamp.sec + 1e-9 * msg->header.stamp.nanosec;
-        }
-        {
-            std::lock_guard<std::mutex> lock(this->quat_mutex);
-            this->quat[0] = msg->pose.pose.orientation.w;
-            this->quat[1] = msg->pose.pose.orientation.x;
-            this->quat[2] = msg->pose.pose.orientation.y;
-            this->quat[3] = msg->pose.pose.orientation.z;
-        }
-        {
-            std::lock_guard<std::mutex> lock(this->vel_mutex);
-            this->vel[0] = msg->twist.twist.linear.x;
-            this->vel[1] = msg->twist.twist.linear.y;
-            this->vel[2] = msg->twist.twist.linear.z;
-        }
-        {
-            std::lock_guard<std::mutex> lock(this->angular_vel_mutex);
-            this->angular_vel[0] = msg->twist.twist.angular.x;
-            this->angular_vel[1] = msg->twist.twist.angular.y;
-            this->angular_vel[2] = msg->twist.twist.angular.z;
-        }
+        this->position[0].store(msg->pose.pose.position.x);
+        this->position[1].store(msg->pose.pose.position.y);
+        this->position[2].store(msg->pose.pose.position.z);
+
+        this->sim_time.store(msg->header.stamp.sec + 1e-9 * msg->header.stamp.nanosec);
+
+        this->quat[0].store(msg->pose.pose.orientation.w);
+        this->quat[1].store(msg->pose.pose.orientation.x);
+        this->quat[2].store(msg->pose.pose.orientation.y);
+        this->quat[3].store(msg->pose.pose.orientation.z);
+
+        this->vel[0].store(msg->twist.twist.linear.x);
+        this->vel[1].store(msg->twist.twist.linear.y);
+        this->vel[2].store(msg->twist.twist.linear.z);
+
+        this->angular_vel[0].store(msg->twist.twist.angular.x);
+        this->angular_vel[1].store(msg->twist.twist.angular.y);
+        this->angular_vel[2].store(msg->twist.twist.angular.z);
+
     }
 
     rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID &uuid,
@@ -109,7 +99,14 @@ private:
             RCLCPP_ERROR(this->get_logger(), "Goal position must have 3 elements");
             return rclcpp_action::GoalResponse::REJECT;
         }
-        RCLCPP_INFO(this->get_logger(), "Received goal position request at x=%g, y=%g, z=%g", goal->position[0], goal->position[1], goal->position[2]);
+        if(goal->relative)
+        {
+            RCLCPP_INFO(this->get_logger(), "Received goal position request at x=~%g, y=~%g, z=~%g", goal->position[0], goal->position[1], goal->position[2]);
+        }
+        else
+        {
+            RCLCPP_INFO(this->get_logger(), "Received goal position request at x=%g, y=%g, z=%g", goal->position[0], goal->position[1], goal->position[2]);
+        }
         if(goal->turn_off_motors_after_reaching)
         {
             RCLCPP_INFO(this->get_logger(), "Stop applying force after reaching the goal");
@@ -122,8 +119,6 @@ private:
     {
         RCLCPP_INFO(this->get_logger(), "Received request to cancel goal");
         (void)goal_handle;
-        hovering = true;
-        hovering_thread.detach();
         return rclcpp_action::CancelResponse::ACCEPT;
     }
 
@@ -147,102 +142,119 @@ private:
         bool succeed = false;
         double start_time;
         double sim_time_;
-        hovering = false;
-        if(hovering_thread.joinable()) hovering_thread.join();
+        hovering.store(false);
+        if(hovering_thread && hovering_thread->joinable()) hovering_thread->join();
 
         if(goal->relative)
         {
-            std::lock_guard<std::mutex> lock(this->position_mutex);
-            for(int i = 0; i < 3; i++) goal_pos[i] += this->position[i];
+            for(int i = 0; i < 3; i++) goal_pos[i] += this->position[i].load();
         }
-        {
-            std::lock_guard<std::mutex> lock(this->sim_time_mutex);
-            start_time = sim_time_ = this->sim_time;
-        }
+        start_time = sim_time_ = this->sim_time.load();
 
-        double fre = 30.0;
+        double fre = 10.0;
         rclcpp::Rate rate(fre);
-        double prev_time = 1.0 / fre;
+        double prev_time = sim_time_ - 1.0 / fre;
         std::vector<double> error_pos(3);
         std::vector<double> prev_error(3);
         std::vector<double> sum_error{0, 0, 0};
-        {
-            std::lock_guard<std::mutex> lock(this->position_mutex);
-            for(int i = 0; i < 3; i++) prev_error[i] = goal_pos[i] - this->position[i];
-        }
+
+        for(int i = 0; i < 3; i++) prev_error[i] = goal_pos[i] - this->position[i].load();
+
         while(rclcpp::ok() && sim_time_ < start_time + time_limit)
         {
+            for(int i = 0; i < 3; i++) current_pos[i] = this->position[i].load();
+
+            // check if goal is canceled
+            if(goal_handle->is_canceling())
+            {
+                RCLCPP_INFO(this->get_logger(), "Goal canceled");
+                result->final_position = current_pos;
+                goal_handle->canceled(result);
+                hovering.store(true);
+                hovering_thread = std::make_unique<std::thread>(&PositionControlServer::hover, this);
+                return;
+            }
+
             std::vector<double> force(3);
             std::vector<double> torque(3);
-            {
-                std::lock_guard<std::mutex> lock(this->position_mutex);
-                for(int i = 0; i < 3; i++) current_pos[i] = this->position[i];
-            }
+
             goal_handle->publish_feedback(feedback);
             for(int i = 0; i < 3; i++) error_pos[i] = goal_pos[i] - current_pos[i];
             if(error_pos[0] * error_pos[0] + error_pos[1] * error_pos[1] + error_pos[2] * error_pos[2] < error_tolerance * error_tolerance)
             {
-                succeed = true;
-                break;
+                double velocity[3];
+                velocity[0] = this->vel[0].load();
+                velocity[1] = this->vel[1].load();
+                velocity[2] = this->vel[2].load();
+                if(velocity[0] * velocity[0] + velocity[1] * velocity[1] + velocity[2] * velocity[2] < 0.001)
+                {
+                    succeed = true;
+                    break;
+                }
             }
             translation_pid(error_pos, prev_error, sum_error, sim_time, start_time, prev_time, force);
 
+            std::vector<double> goal_quat;
             double axis[2];     // rotation axis
             double theta;       // rotation angle
-            axis[0] = force[1] / sqrt(force[0] * force[0] + force[1] * force[1]);
-            axis[1] = -force[0] / sqrt(force[0] * force[0] + force[1] * force[1]);
-            theta = acos(force[2] / sqrt(force[0] * force[0] + force[1] * force[1] + force[2] * force[2]));
-            std::vector<double> goal_quat{cos(theta / 2), axis[0] * sin(theta / 2), axis[1] * sin(theta / 2), 0};
-            std::vector<double> current_quad(4);
+            double force_proj = sqrt(force[0] * force[0] + force[1] * force[1]);
+            if(force_proj < 0.01 * force[2])
+            {
+                goal_quat = {1, 0, 0, 0};
+            }
+            else
+            {
+                axis[0] = force[1] / force_proj;
+                axis[1] = -force[0] / force_proj;
+                theta = acos(force[2] / sqrt(force[0] * force[0] + force[1] * force[1] + force[2] * force[2]));
+                goal_quat = {cos(theta / 2), axis[0] * sin(theta / 2), axis[1] * sin(theta / 2), 0};
+            }
+            std::vector<double> current_quat(4);
             std::vector<double> angular_vel_(3);
-            {
-                std::lock_guard<std::mutex> lock(this->quat_mutex);
-                for(int i = 0; i < 4; i++) current_quad[i] = this->quat[i];
-            }
-            {
-                std::lock_guard<std::mutex> lock(this->angular_vel_mutex);
-                for(int i = 0; i < 3; i++) angular_vel_[i] = this->angular_vel[i];
-            }
-            rotation_pd(goal_quat, current_quad, angular_vel_, torque);
-            geometry_msgs::msg::Twist msg;
-            msg.linear.x = force[0];
-            msg.linear.y = force[1];
-            msg.linear.z = force[2];
-            msg.angular.x = torque[0];
-            msg.angular.y = torque[1];
-            msg.angular.z = torque[2];
+
+            for(int i = 0; i < 4; i++) current_quat[i] = this->quat[i].load();
+            for(int i = 0; i < 3; i++) angular_vel_[i] = this->angular_vel[i].load();
+
+            rotation_pd(goal_quat, current_quat, angular_vel_, torque);
+            geometry_msgs::msg::Wrench msg;
+            msg.force.x = force[0];
+            msg.force.y = force[1];
+            msg.force.z = force[2];
+            msg.torque.x = torque[0];
+            msg.torque.y = torque[1];
+            msg.torque.z = torque[2];
             force_pub->publish(msg);
+            // RCLCPP_INFO(this->get_logger(), "Force: %g, %g, %g, Torque: %g, %g, %g", force[0], force[1], force[2], torque[0], torque[1], torque[2]);
 
             rate.sleep();
-            {
-                std::lock_guard<std::mutex> lock(this->sim_time_mutex);
-                sim_time_ = this->sim_time;
-            }
+            sim_time_ = this->sim_time.load();
         }
         result->final_position = current_pos;
         if(succeed)
         {
+            RCLCPP_INFO(this->get_logger(), "Goal succeeded");
             goal_handle->succeed(result);
             if(goal->turn_off_motors_after_reaching)
             {
-                hovering = false;
-                geometry_msgs::msg::Twist msg;
-                msg.linear.x = 0;
-                msg.linear.y = 0;
-                msg.linear.z = 0;
-                msg.angular.x = 0;
-                msg.angular.y = 0;
-                msg.angular.z = 0;
+                hovering.store(false);
+                geometry_msgs::msg::Wrench msg;
+                msg.force.x = 0;
+                msg.force.y = 0;
+                msg.force.z = 0;
+                msg.torque.x = 0;
+                msg.torque.y = 0;
+                msg.torque.z = 0;
                 force_pub->publish(msg);
             }
-            else hovering = true;
+            else hovering.store(true);
         }
         else
         {
+            RCLCPP_INFO(this->get_logger(), "Goal aborted");
             goal_handle->abort(result);
-            hovering = true;
+            hovering.store(true);
         }
-        hovering_thread.detach();
+        hovering_thread = std::make_unique<std::thread>(&PositionControlServer::hover, this);
     }
 
     void translation_pid(const std::vector<double> &error,
@@ -254,33 +266,33 @@ private:
         std::vector<double> &force)
     {
         // PID control
-        // force = kp * error + kd * (error - prev_error) / dt + ki * sum_error / T
-        double kp = 1.0, ki = 0.1, kd = 0.1;
+        // force = kp * error + kd * (error - prev_error) / dt + ki * sum_error + G
+        double kp = 0.6, ki = 0.01, kd = 1.5;
         double dt = time - prev_time;
         double T = time - start_time;
         for(int i = 0; i < 3; i++)
         {
-            force[i] = kp * error[i] + kd * (error[i] - prev_error[i]) / dt + ki * sum_error[i] / T;
+            force[i] = kp * error[i] + kd * (error[i] - prev_error[i]) / dt + ki * sum_error[i] / (T + 1.0);
             sum_error[i] += error[i];
             prev_error[i] = error[i];
         }
-        force[2] += gravity;
+        force[2] += G;
         prev_time = time;
     }
 
     void rotation_pd(const std::vector<double> &goal_quat,
-        const std::vector<double> &current_quad,
+        const std::vector<double> &current_quat,
         const std::vector<double> &angular_vel,
         std::vector<double> &torque)
     {
         // PD control
-        // torque = kp * (goal_quat / current_quad) - kd * angular_vel
+        // torque = kp * (goal_quat / current_quat) - kd * angular_vel
         const std::vector<double> kp{0.02, 0.02, 0.04};
         const std::vector<double> kd{0.1, 0.1, 0.2};
         std::vector<double> error_quat_imag(3);     // imaginary part of the error quaternion
-        error_quat_imag[0] = -goal_quat[0] * current_quad[1] + goal_quat[1] * current_quad[0] - goal_quat[2] * current_quad[3] + goal_quat[3] * current_quad[2];
-        error_quat_imag[1] = -goal_quat[0] * current_quad[2] + goal_quat[1] * current_quad[3] + goal_quat[2] * current_quad[0] - goal_quat[3] * current_quad[1];
-        error_quat_imag[2] = -goal_quat[0] * current_quad[3] - goal_quat[1] * current_quad[2] + goal_quat[2] * current_quad[1] + goal_quat[3] * current_quad[0];
+        error_quat_imag[0] = -goal_quat[0] * current_quat[1] + goal_quat[1] * current_quat[0] - goal_quat[2] * current_quat[3] + goal_quat[3] * current_quat[2];
+        error_quat_imag[1] = -goal_quat[0] * current_quat[2] + goal_quat[1] * current_quat[3] + goal_quat[2] * current_quat[0] - goal_quat[3] * current_quat[1];
+        error_quat_imag[2] = -goal_quat[0] * current_quat[3] - goal_quat[1] * current_quat[2] + goal_quat[2] * current_quat[1] + goal_quat[3] * current_quat[0];
         for(int i = 0; i < 3; i++)
         {
             torque[i] = kp[i] * error_quat_imag[i] - kd[i] * angular_vel[i];
@@ -289,64 +301,48 @@ private:
 
     void hover()
     {
-        if(!hovering) return;
+        if(!hovering.load()) return;
+        RCLCPP_INFO(this->get_logger(), "start hovering");
         double fre = 5.0;
         rclcpp::Rate rate(fre);
         std::vector<double> force(3);
         std::vector<double> torque(3);
-        std::vector<double> present_vel(3);
+        std::vector<double> current_vel(3);
         std::vector<double> prev_vel(3);
-        double sim_time_;
-        {
-            std::lock_guard<std::mutex> lock(this->sim_time_mutex);
-            sim_time_ = this->sim_time;
-        }
+        double sim_time_ = this->sim_time.load();
         double prev_sim_time = sim_time_ - 1.0 / fre;
+
+        for(int i = 0; i < 3; i++) prev_vel[i] = this->vel[i].load();
+        while(rclcpp::ok() && hovering.load())
         {
-            std::lock_guard<std::mutex> lock(this->vel_mutex);
-            for(int i = 0; i < 3; i++) prev_vel[i] = this->vel[i];
-        }
-        while(rclcpp::ok() && hovering)
-        {
-            {
-                std::lock_guard<std::mutex> lock(this->sim_time_mutex);
-                sim_time_ = this->sim_time;
-            }
-            {
-                std::lock_guard<std::mutex> lock(this->vel_mutex);
-                for(int i = 0; i < 3; i++) present_vel[i] = this->vel[i];
-            }
+            sim_time_ = this->sim_time.load();
+            for(int i = 0; i < 3; i++) current_vel[i] = this->vel[i].load();
             // PD control
-            // force = kp * (0 - present_vel) - kd * (present_vel - prev_vel) / dt + gravity
-            double kp[3] = {0.1, 0.1, 0.1};
+            // force = kp * (0 - current_vel) - kd * (current_vel - prev_vel) / dt + G
+            double kp[3] = {1.0, 1.0, 1.0};
             double kd[3] = {0.1, 0.1, 0.1};
             double dt = sim_time_ - prev_sim_time;
-            force[0] = kp[0] * (0 - present_vel[0]) - kd[0] * (present_vel[0] - prev_vel[0]) / dt;
-            force[1] = kp[1] * (0 - present_vel[1]) - kd[1] * (present_vel[1] - prev_vel[1]) / dt;
-            force[2] = kp[2] * (0 - present_vel[2]) - kd[2] * (present_vel[2] - prev_vel[2]) / dt + gravity;
+            force[0] = kp[0] * (0 - current_vel[0]) - kd[0] * (current_vel[0] - prev_vel[0]) / dt;
+            force[1] = kp[1] * (0 - current_vel[1]) - kd[1] * (current_vel[1] - prev_vel[1]) / dt;
+            force[2] = kp[2] * (0 - current_vel[2]) - kd[2] * (current_vel[2] - prev_vel[2]) / dt + G;
 
-            std::vector<double> current_quad(4);
+            std::vector<double> current_quat(4);
             std::vector<double> angular_vel_(3);
-            {
-                std::lock_guard<std::mutex> lock(this->quat_mutex);
-                for(int i = 0; i < 4; i++) current_quad[i] = this->quat[i];
-            }
-            {
-                std::lock_guard<std::mutex> lock(this->angular_vel_mutex);
-                for(int i = 0; i < 3; i++) angular_vel_[i] = this->angular_vel[i];
-            }
-            rotation_pd({1,0,0,0}, current_quad, angular_vel_, torque);
-            geometry_msgs::msg::Twist msg;
-            msg.linear.x = force[0];
-            msg.linear.y = force[1];
-            msg.linear.z = force[2];
-            msg.angular.x = torque[0];
-            msg.angular.y = torque[1];
-            msg.angular.z = torque[2];
+
+            for(int i = 0; i < 4; i++) current_quat[i] = this->quat[i].load();
+            for(int i = 0; i < 3; i++) angular_vel_[i] = this->angular_vel[i].load();
+            rotation_pd({1,0,0,0}, current_quat, angular_vel_, torque);
+            geometry_msgs::msg::Wrench msg;
+            msg.force.x = force[0];
+            msg.force.y = force[1];
+            msg.force.z = force[2];
+            msg.torque.x = torque[0];
+            msg.torque.y = torque[1];
+            msg.torque.z = torque[2];
             force_pub->publish(msg);
 
             prev_sim_time = sim_time_;
-            for(int i = 0; i < 3; i++) prev_vel[i] = present_vel[i];
+            for(int i = 0; i < 3; i++) prev_vel[i] = current_vel[i];
             rate.sleep();
         }
     }

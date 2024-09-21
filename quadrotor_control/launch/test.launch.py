@@ -55,7 +55,7 @@ def generate_launch_description():
         executable='position_control_server',
         output='screen',
         namespace='quad_0',
-        parameters=[{'gravity': 1.316*9.8,
+        parameters=[{'G': 1.316*9.8,
                      'odom_topic': '/quad_0/odom',
                      'force_topic': '/quad_0/gazebo_ros_force',
                      'action_service_name': 'position_control_service',}]
