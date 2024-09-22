@@ -12,6 +12,35 @@
 #include <cmath>
 #include <atomic>
 
+struct IntegratedError
+{
+    double data[30];
+    double sum;
+    int head;
+    int rear;
+
+    IntegratedError()
+    {
+        head = 1;
+        rear = 0;
+        sum = 0;
+        memset(data, 0, sizeof(data));
+    }
+
+    double getvalue()
+    {
+        return sum;
+    }
+
+    void push(double value)
+    {
+        sum += value - data[head];
+        data[rear] = value;
+        rear = (rear + 1) % 30;
+        head = (head + 1) % 30;
+    }
+};
+
 class PositionControlServer: public rclcpp::Node
 {
 public:
@@ -137,11 +166,11 @@ private:
         current_pos.resize(3);
         auto result = std::make_shared<MoveQuad::Result>();
         std::vector<double> goal_pos = goal->position;
-        double time_limit = goal->time_limit > 0 ? goal->time_limit : 10.0;
+        double time_limit = goal->time_limit > 0 ? goal->time_limit : 20.0;
         double error_tolerance = goal->error_tolerance > 0 ? goal->error_tolerance : 0.1;
         bool succeed = false;
         double start_time;
-        double sim_time_;
+        double sim_time_;   // temp variable for storing sim_time
         hovering.store(false);
         if(hovering_thread && hovering_thread->joinable()) hovering_thread->join();
 
@@ -156,7 +185,7 @@ private:
         double prev_time = sim_time_ - 1.0 / fre;
         std::vector<double> error_pos(3);
         std::vector<double> prev_error(3);
-        std::vector<double> sum_error{0, 0, 0};
+        std::vector<IntegratedError> integrated_error(3);
 
         for(int i = 0; i < 3; i++) prev_error[i] = goal_pos[i] - this->position[i].load();
 
@@ -192,20 +221,21 @@ private:
                     break;
                 }
             }
-            translation_pid(error_pos, prev_error, sum_error, sim_time, start_time, prev_time, force);
+
+            translation_pid(error_pos, prev_error, integrated_error, sim_time, prev_time, force);
 
             std::vector<double> goal_quat;
             double axis[2];     // rotation axis
             double theta;       // rotation angle
             double force_proj = sqrt(force[0] * force[0] + force[1] * force[1]);
-            if(force_proj < 0.01 * force[2])
+            if(force_proj < 0.001 * force[2])
             {
                 goal_quat = {1, 0, 0, 0};
             }
             else
             {
-                axis[0] = force[1] / force_proj;
-                axis[1] = -force[0] / force_proj;
+                axis[0] = -force[1] / force_proj;
+                axis[1] = force[0] / force_proj;
                 theta = acos(force[2] / sqrt(force[0] * force[0] + force[1] * force[1] + force[2] * force[2]));
                 goal_quat = {cos(theta / 2), axis[0] * sin(theta / 2), axis[1] * sin(theta / 2), 0};
             }
@@ -232,7 +262,7 @@ private:
         result->final_position = current_pos;
         if(succeed)
         {
-            RCLCPP_INFO(this->get_logger(), "Goal succeeded");
+            RCLCPP_INFO(this->get_logger(), "Goal succeeded, total time: %g", sim_time_ - start_time);
             goal_handle->succeed(result);
             if(goal->turn_off_motors_after_reaching)
             {
@@ -259,21 +289,19 @@ private:
 
     void translation_pid(const std::vector<double> &error,
         std::vector<double> &prev_error,
-        std::vector<double> &sum_error,
+        std::vector<IntegratedError> &integrated_error,
         const double time,
-        const double start_time,
         double &prev_time,
         std::vector<double> &force)
     {
         // PID control
-        // force = kp * error + kd * (error - prev_error) / dt + ki * sum_error + G
-        double kp = 0.6, ki = 0.01, kd = 1.5;
+        // force = kp * error + kd * (error - prev_error) / dt + ki * integrated_error + G
+        double kp = 0.6, ki = 0.005, kd = 1.5;
         double dt = time - prev_time;
-        double T = time - start_time;
         for(int i = 0; i < 3; i++)
         {
-            force[i] = kp * error[i] + kd * (error[i] - prev_error[i]) / dt + ki * sum_error[i] / (T + 1.0);
-            sum_error[i] += error[i];
+            force[i] = kp * error[i] + kd * (error[i] - prev_error[i]) / dt + ki * integrated_error[i].getvalue();
+            integrated_error[i].push(error[i] * dt);
             prev_error[i] = error[i];
         }
         force[2] += G;
@@ -290,6 +318,7 @@ private:
         const std::vector<double> kp{0.02, 0.02, 0.04};
         const std::vector<double> kd{0.1, 0.1, 0.2};
         std::vector<double> error_quat_imag(3);     // imaginary part of the error quaternion
+        // error_quat = goal_quat / current_quat
         error_quat_imag[0] = -goal_quat[0] * current_quat[1] + goal_quat[1] * current_quat[0] - goal_quat[2] * current_quat[3] + goal_quat[3] * current_quat[2];
         error_quat_imag[1] = -goal_quat[0] * current_quat[2] + goal_quat[1] * current_quat[3] + goal_quat[2] * current_quat[0] - goal_quat[3] * current_quat[1];
         error_quat_imag[2] = -goal_quat[0] * current_quat[3] - goal_quat[1] * current_quat[2] + goal_quat[2] * current_quat[1] + goal_quat[3] * current_quat[0];
