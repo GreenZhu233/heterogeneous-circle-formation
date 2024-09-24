@@ -138,7 +138,7 @@ private:
         }
         if(goal->turn_off_motors_after_reaching)
         {
-            RCLCPP_INFO(this->get_logger(), "Stop applying force after reaching the goal");
+            RCLCPP_INFO(this->get_logger(), "Force will be stop applying after reaching the goal");
         }
         (void)uuid;     // ignore the argument
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
@@ -211,15 +211,8 @@ private:
             for(int i = 0; i < 3; i++) error_pos[i] = goal_pos[i] - current_pos[i];
             if(error_pos[0] * error_pos[0] + error_pos[1] * error_pos[1] + error_pos[2] * error_pos[2] < error_tolerance * error_tolerance)
             {
-                double velocity[3];
-                velocity[0] = this->vel[0].load();
-                velocity[1] = this->vel[1].load();
-                velocity[2] = this->vel[2].load();
-                if(velocity[0] * velocity[0] + velocity[1] * velocity[1] + velocity[2] * velocity[2] < 0.001)
-                {
-                    succeed = true;
-                    break;
-                }
+                succeed = true;
+                break;
             }
 
             translation_pid(error_pos, prev_error, integrated_error, sim_time, prev_time, force);
