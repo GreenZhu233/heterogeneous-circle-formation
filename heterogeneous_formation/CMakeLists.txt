@@ -7,8 +7,11 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(formation_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(formation_gazebo_worlds REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(nav_msgs REQUIRED)
 
 
 if(BUILD_TESTING)
@@ -23,10 +26,24 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+add_executable(quadrotor_landing src/quadrotor_landing.cpp)
+ament_target_dependencies(quadrotor_landing
+  rclcpp
+  rclcpp_action
+  formation_interfaces
+  nav_msgs
+)
+
 ament_package()
 
 install(
   DIRECTORY
     launch
   DESTINATION share/${PROJECT_NAME}
+)
+
+install(
+  TARGETS
+    quadrotor_landing
+  DESTINATION lib/${PROJECT_NAME}
 )
