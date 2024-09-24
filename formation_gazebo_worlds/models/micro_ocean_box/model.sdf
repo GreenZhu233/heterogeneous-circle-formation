@@ -20,10 +20,10 @@
     <link name="link">
       <visual name="ground">
         <cast_shadows>false</cast_shadows>
-        <pose>-20 0 -50 0 0 0</pose>
+        <pose>-100 0 -50 0 0 0</pose>
         <geometry>
           <box>
-            <size>40 40 .1</size>
+            <size>200 200 .1</size>
           </box>
         </geometry>
         <material>
@@ -35,20 +35,20 @@
       </visual>
 
       <collision name="ground">
-        <pose>-20 0 -50 0 0 0</pose>
+        <pose>-100 0 -50 0 0 0</pose>
         <geometry>
           <box>
-            <size>40 40 .1</size>
+            <size>200 200 .1</size>
           </box>
         </geometry>
       </collision>
 
       <visual name="surface">
         <cast_shadows>false</cast_shadows>
-        <pose>-20 0 0 0 0 0</pose>
+        <pose>-100 0 0 0 0 0</pose>
         <geometry>
           <box>
-            <size>40 40 .1</size>
+            <size>200 200 .1</size>
           </box>
         </geometry>
         <material>
@@ -64,7 +64,7 @@
         <pose>0 0 -25 0 0 0</pose>
         <geometry>
           <box>
-            <size>.1 40 50</size>
+            <size>.1 200 50</size>
           </box>
         </geometry>
         <material>
@@ -77,10 +77,10 @@
 
       <visual name="south">
         <cast_shadows>false</cast_shadows>
-        <pose>-40 0 -25 0 0 0</pose>
+        <pose>-200 0 -25 0 0 0</pose>
         <geometry>
           <box>
-            <size>.1 40 50</size>
+            <size>.1 200 50</size>
           </box>
         </geometry>
         <material>
@@ -93,10 +93,10 @@
 
       <visual name="east">
         <cast_shadows>false</cast_shadows>
-        <pose>-20 -20 -25 0 0 0</pose>
+        <pose>-100 -100 -25 0 0 0</pose>
         <geometry>
           <box>
-            <size>40 .1 50</size>
+            <size>200 .1 50</size>
           </box>
         </geometry>
         <material>
@@ -109,10 +109,10 @@
 
       <visual name="west">
         <cast_shadows>false</cast_shadows>
-        <pose>-20 20 -25 0 0 0</pose>
+        <pose>-100 100 -25 0 0 0</pose>
         <geometry>
           <box>
-            <size>40 .1 50</size>
+            <size>200 .1 50</size>
           </box>
         </geometry>
         <material>
