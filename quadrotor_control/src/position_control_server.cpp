@@ -1,6 +1,5 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
-#include "rclcpp_components/register_node_macro.hpp"
 #include "formation_interfaces/action/move_quad.hpp"
 #include "quadrotor_control/visibility_control.h"
 #include "nav_msgs/msg/odometry.hpp"
@@ -11,6 +10,7 @@
 #include <vector>
 #include <cmath>
 #include <atomic>
+#include <map>
 
 struct IntegratedError
 {
@@ -50,15 +50,28 @@ public:
     explicit PositionControlServer(std::string name, const rclcpp::NodeOptions &options = rclcpp::NodeOptions())
     : Node(name, options)
     {
+        using namespace std::placeholders;
         this->declare_parameter("G", 1.316*9.8);
         this->declare_parameter("odom_topic", "/odom");
         this->declare_parameter("force_topic", "/gazebo_ros_force");
         this->declare_parameter("action_service_name", "/position_control");
+        this->declare_parameter("pos_p", 1.0);
+        this->declare_parameter("pos_i", 0.005);
+        this->declare_parameter("pos_d", 2.2);
+        this->declare_parameter("rot_p", std::vector<double>{0.04, 0.04, 0.08});
+        this->declare_parameter("rot_d", std::vector<double>{0.1, 0.1, 0.2});
+        this->param_callback_handle = this->add_on_set_parameters_callback(
+            std::bind(&PositionControlServer::param_callback, this, _1));
+
         this->G = this->get_parameter("G").as_double();
+        this->pos_p = this->get_parameter("pos_p").as_double();
+        this->pos_i = this->get_parameter("pos_i").as_double();
+        this->pos_d = this->get_parameter("pos_d").as_double();
+        this->rot_p = this->get_parameter("rot_p").as_double_array();
+        this->rot_d = this->get_parameter("rot_d").as_double_array();
         std::string odom_topic = this->get_parameter("odom_topic").as_string();
         std::string force_topic = this->get_parameter("force_topic").as_string();
         std::string action_service_name = this->get_parameter("action_service_name").as_string();
-        using namespace std::placeholders;
         this->action_server = rclcpp_action::create_server<MoveQuad>(
             this,
             action_service_name,
@@ -89,6 +102,9 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::Wrench>::SharedPtr force_pub;
     rclcpp_action::Server<MoveQuad>::SharedPtr action_server;
     double G;
+    double pos_p, pos_i, pos_d;
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle;
+    std::vector<double> rot_p, rot_d;
     std::atomic<double> position[3];
     std::atomic<double> sim_time;
     std::atomic<double> quat[4];
@@ -118,6 +134,36 @@ private:
         this->angular_vel[1].store(msg->twist.twist.angular.y);
         this->angular_vel[2].store(msg->twist.twist.angular.z);
 
+    }
+
+    rcl_interfaces::msg::SetParametersResult param_callback(const std::vector<rclcpp::Parameter> &parameters)
+    {
+        for(const auto &param : parameters)
+        {
+            if(param.get_name() == "pos_p")
+            {
+                this->pos_p = param.as_double();
+            }
+            else if(param.get_name() == "pos_i")
+            {
+                this->pos_i = param.as_double();
+            }
+            else if(param.get_name() == "pos_d")
+            {
+                this->pos_d = param.as_double();
+            }
+            else if(param.get_name() == "rot_p")
+            {
+                this->rot_p = param.as_double_array();
+            }
+            else if(param.get_name() == "rot_d")
+            {
+                this->rot_d = param.as_double_array();
+            }
+        }
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        return result;
     }
 
     rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID &uuid,
@@ -289,11 +335,10 @@ private:
     {
         // PID control
         // force = kp * error + kd * (error - prev_error) / dt + ki * integrated_error + G
-        double kp = 0.6, ki = 0.005, kd = 1.5;
         double dt = time - prev_time;
         for(int i = 0; i < 3; i++)
         {
-            force[i] = kp * error[i] + kd * (error[i] - prev_error[i]) / dt + ki * integrated_error[i].getvalue();
+            force[i] = pos_p * error[i] + pos_d * (error[i] - prev_error[i]) / dt + pos_i * integrated_error[i].getvalue();
             integrated_error[i].push(error[i] * dt);
             prev_error[i] = error[i];
         }
@@ -308,8 +353,6 @@ private:
     {
         // PD control
         // torque = kp * (goal_quat / current_quat) - kd * angular_vel
-        const std::vector<double> kp{0.02, 0.02, 0.04};
-        const std::vector<double> kd{0.1, 0.1, 0.2};
         std::vector<double> error_quat_imag(3);     // imaginary part of the error quaternion
         // error_quat = goal_quat / current_quat
         error_quat_imag[0] = -goal_quat[0] * current_quat[1] + goal_quat[1] * current_quat[0] - goal_quat[2] * current_quat[3] + goal_quat[3] * current_quat[2];
@@ -317,7 +360,7 @@ private:
         error_quat_imag[2] = -goal_quat[0] * current_quat[3] - goal_quat[1] * current_quat[2] + goal_quat[2] * current_quat[1] + goal_quat[3] * current_quat[0];
         for(int i = 0; i < 3; i++)
         {
-            torque[i] = kp[i] * error_quat_imag[i] - kd[i] * angular_vel[i];
+            torque[i] = rot_p[i] * error_quat_imag[i] - rot_d[i] * angular_vel[i];
         }
     }
 

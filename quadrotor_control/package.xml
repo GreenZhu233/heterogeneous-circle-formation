@@ -12,7 +12,6 @@
   <depend>formation_interfaces</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
-  <depend>rclcpp_components</depend>
   <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>
 
