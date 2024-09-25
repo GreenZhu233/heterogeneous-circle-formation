@@ -58,9 +58,11 @@ def generate_launch_description():
         package='quadrotor_control',
         executable='position_control_server',
         namespace='quad_0',
-        parameters=[{'odom_topic': 'odom',
+        parameters=[{'self_odom_topic': 'odom',
+                     'tracking_target_odom_topic': '/rexrov_0/pose_gt',
                      'force_topic': 'gazebo_ros_force',
-                     'action_service_name': 'position_control_action'}]
+                     'action_service_name': 'position_control_action',
+                     'use_sim_time': True}]
     )
 
     # load a rexrov

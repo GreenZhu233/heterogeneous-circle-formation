@@ -27,7 +27,7 @@ public:
         );
         this->uuv_odom_sub = this->create_subscription<nav_msgs::msg::Odometry>(
             uuv_odom_topic,
-            10,
+            1,
             std::bind(&PositionControlClient::uuv_odom_callback, this, _1)
         );
     }
@@ -105,57 +105,56 @@ int main(int argc, char *argv[])
     rclcpp::init(argc, argv);
     auto node = std::make_shared<PositionControlClient>("position_control_client");
     auto goal = PositionControlClient::MoveQuad::Goal();
-    rclcpp::Rate rate(2);
 
     sleep(5);   // wait for me to turn on gazebo gui
 
     // lift off
     goal.position = {0.0, 0.0, 4.0};
-    goal.relative = true;
+    goal.is_relative_to_self = true;
     goal.error_tolerance = 0.5;
     if(!node->send_goal(goal))
     {
         rclcpp::shutdown();
         return 1;
     }
+    RCLCPP_INFO(node->get_logger(), "Lifting off goal sent");
     while(rclcpp::ok() && !node->is_goal_done())
     {
         rclcpp::spin_some(node);
-        rate.sleep();
     }
 
     // move to above the uuv
-    goal.position = node->uuv_pos;
-    goal.position[2] = 4.0;
-    goal.relative = false;
-    goal.error_tolerance = 0.05;
+    goal.position = {0.0, 0.0, 4.0};
+    goal.is_relative_to_self = false;
+    goal.is_relative_to_target = true;
+    goal.error_tolerance = 0.1;
     goal.time_limit = 30.0;
     if(!node->send_goal(goal))
     {
         rclcpp::shutdown();
         return 1;
     }
+    RCLCPP_INFO(node->get_logger(), "Moving to above the uuv goal sent");
     while(rclcpp::ok() && !node->is_goal_done())
     {
         rclcpp::spin_some(node);
-        rate.sleep();
     }
 
     // touch town
-    goal.position = node->uuv_pos;
-    goal.position[2] += 1.0;
+    goal.position = {0.0, 0.0, 1.0};
     goal.error_tolerance = 0.01;
-    goal.turn_off_motors_after_reaching = true;
+    goal.turn_off_motors_after_reach = true;
     if(!node->send_goal(goal))
     {
         rclcpp::shutdown();
         return 1;
     }
+    RCLCPP_INFO(node->get_logger(), "Touch down goal sent");
     while(rclcpp::ok() && !node->is_goal_done())
     {
         rclcpp::spin_some(node);
-        rate.sleep();
     }
 
+    rclcpp::shutdown();
     return 0;
 }

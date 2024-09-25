@@ -52,9 +52,10 @@ public:
     {
         using namespace std::placeholders;
         this->declare_parameter("G", 1.316*9.8);
-        this->declare_parameter("odom_topic", "/odom");
-        this->declare_parameter("force_topic", "/gazebo_ros_force");
-        this->declare_parameter("action_service_name", "/position_control");
+        this->declare_parameter("self_odom_topic", "odom");
+        this->declare_parameter("tracking_target_odom_topic", "");
+        this->declare_parameter("force_topic", "gazebo_ros_force");
+        this->declare_parameter("action_service_name", "position_control_action");
         this->declare_parameter("pos_p", 1.0);
         this->declare_parameter("pos_i", 0.005);
         this->declare_parameter("pos_d", 2.2);
@@ -69,7 +70,8 @@ public:
         this->pos_d = this->get_parameter("pos_d").as_double();
         this->rot_p = this->get_parameter("rot_p").as_double_array();
         this->rot_d = this->get_parameter("rot_d").as_double_array();
-        std::string odom_topic = this->get_parameter("odom_topic").as_string();
+        std::string self_odom_topic = this->get_parameter("self_odom_topic").as_string();
+        std::string tracking_target_odom_topic = this->get_parameter("tracking_target_odom_topic").as_string();
         std::string force_topic = this->get_parameter("force_topic").as_string();
         std::string action_service_name = this->get_parameter("action_service_name").as_string();
         this->action_server = rclcpp_action::create_server<MoveQuad>(
@@ -83,12 +85,23 @@ public:
         this->callback_group = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
         rclcpp::SubscriptionOptions sub_options;
         sub_options.callback_group = this->callback_group;
-        this->odom_sub = this->create_subscription<nav_msgs::msg::Odometry>(
-            odom_topic,
+        this->self_odom_sub = this->create_subscription<nav_msgs::msg::Odometry>(
+            self_odom_topic,
             10,
-            std::bind(&PositionControlServer::odom_callback, this, _1),
+            std::bind(&PositionControlServer::self_odom_callback, this, _1),
             sub_options
         );
+
+        if(tracking_target_odom_topic != "")
+        {
+            this->tracking_target_odom_sub = this->create_subscription<nav_msgs::msg::Odometry>(
+                tracking_target_odom_topic,
+                10,
+                std::bind(&PositionControlServer::tracking_target_odom_callback, this, _1),
+                sub_options
+            );
+        }
+        else this->tracking_target_odom_sub = nullptr;
 
         this->force_pub = this->create_publisher<geometry_msgs::msg::Wrench>(
             force_topic,
@@ -98,7 +111,8 @@ public:
 
 private:
     rclcpp::CallbackGroup::SharedPtr callback_group;
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr self_odom_sub;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr tracking_target_odom_sub;
     rclcpp::Publisher<geometry_msgs::msg::Wrench>::SharedPtr force_pub;
     rclcpp_action::Server<MoveQuad>::SharedPtr action_server;
     double G;
@@ -106,6 +120,7 @@ private:
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle;
     std::vector<double> rot_p, rot_d;
     std::atomic<double> position[3];
+    std::atomic<double> tracking_target_position[3];
     std::atomic<double> sim_time;
     std::atomic<double> quat[4];
     std::atomic<double> vel[3];
@@ -113,7 +128,7 @@ private:
     std::unique_ptr<std::thread> hovering_thread;
     std::atomic<bool> hovering;
 
-    void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
+    void self_odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
     {
         this->position[0].store(msg->pose.pose.position.x);
         this->position[1].store(msg->pose.pose.position.y);
@@ -133,33 +148,24 @@ private:
         this->angular_vel[0].store(msg->twist.twist.angular.x);
         this->angular_vel[1].store(msg->twist.twist.angular.y);
         this->angular_vel[2].store(msg->twist.twist.angular.z);
+    }
 
+    void tracking_target_odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
+    {
+        this->tracking_target_position[0].store(msg->pose.pose.position.x);
+        this->tracking_target_position[1].store(msg->pose.pose.position.y);
+        this->tracking_target_position[2].store(msg->pose.pose.position.z);
     }
 
     rcl_interfaces::msg::SetParametersResult param_callback(const std::vector<rclcpp::Parameter> &parameters)
     {
         for(const auto &param : parameters)
         {
-            if(param.get_name() == "pos_p")
-            {
-                this->pos_p = param.as_double();
-            }
-            else if(param.get_name() == "pos_i")
-            {
-                this->pos_i = param.as_double();
-            }
-            else if(param.get_name() == "pos_d")
-            {
-                this->pos_d = param.as_double();
-            }
-            else if(param.get_name() == "rot_p")
-            {
-                this->rot_p = param.as_double_array();
-            }
-            else if(param.get_name() == "rot_d")
-            {
-                this->rot_d = param.as_double_array();
-            }
+            if(param.get_name() == "pos_p") this->pos_p = param.as_double();
+            else if(param.get_name() == "pos_i") this->pos_i = param.as_double();
+            else if(param.get_name() == "pos_d") this->pos_d = param.as_double();
+            else if(param.get_name() == "rot_p") this->rot_p = param.as_double_array();
+            else if(param.get_name() == "rot_d") this->rot_d = param.as_double_array();
         }
         rcl_interfaces::msg::SetParametersResult result;
         result.successful = true;
@@ -174,15 +180,24 @@ private:
             RCLCPP_ERROR(this->get_logger(), "Goal position must have 3 elements");
             return rclcpp_action::GoalResponse::REJECT;
         }
-        if(goal->relative)
+        if(goal->is_relative_to_self)
         {
             RCLCPP_INFO(this->get_logger(), "Received goal position request at x=~%g, y=~%g, z=~%g", goal->position[0], goal->position[1], goal->position[2]);
+        }
+        else if(goal->is_relative_to_target)
+        {
+            if(tracking_target_odom_sub == nullptr)
+            {
+                RCLCPP_ERROR(this->get_logger(), "No tracking target is set");
+                return rclcpp_action::GoalResponse::REJECT;
+            }
+            RCLCPP_INFO(this->get_logger(), "Received goal position request at x=^%g, y=^%g, z=^%g", goal->position[0], goal->position[1], goal->position[2]);
         }
         else
         {
             RCLCPP_INFO(this->get_logger(), "Received goal position request at x=%g, y=%g, z=%g", goal->position[0], goal->position[1], goal->position[2]);
         }
-        if(goal->turn_off_motors_after_reaching)
+        if(goal->turn_off_motors_after_reach)
         {
             RCLCPP_INFO(this->get_logger(), "Force will be stop applying after reaching the goal");
         }
@@ -220,9 +235,13 @@ private:
         hovering.store(false);
         if(hovering_thread && hovering_thread->joinable()) hovering_thread->join();
 
-        if(goal->relative)
+        if(goal->is_relative_to_self)
         {
             for(int i = 0; i < 3; i++) goal_pos[i] += this->position[i].load();
+        }
+        else if(goal->is_relative_to_target)
+        {
+            for(int i = 0; i < 3; i++) goal_pos[i] += this->tracking_target_position[i].load();
         }
         start_time = sim_time_ = this->sim_time.load();
 
@@ -238,6 +257,11 @@ private:
         while(rclcpp::ok() && sim_time_ < start_time + time_limit)
         {
             for(int i = 0; i < 3; i++) current_pos[i] = this->position[i].load();
+            if(goal->is_relative_to_target)
+            {
+                // tracking the target in real time
+                for(int i = 0; i < 3; i++) goal_pos[i] = goal->position[i] + this->tracking_target_position[i].load();
+            }
 
             // check if goal is canceled
             if(goal_handle->is_canceling())
@@ -303,7 +327,7 @@ private:
         {
             RCLCPP_INFO(this->get_logger(), "Goal succeeded, total time: %g", sim_time_ - start_time);
             goal_handle->succeed(result);
-            if(goal->turn_off_motors_after_reaching)
+            if(goal->turn_off_motors_after_reach)
             {
                 hovering.store(false);
                 geometry_msgs::msg::Wrench msg;
