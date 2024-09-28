@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
     goal.position = {0.0, 0.0, 4.0};
     goal.is_relative_to_self = false;
     goal.is_relative_to_target = true;
-    goal.error_tolerance = 0.1;
+    goal.error_tolerance = 0.3;
     goal.time_limit = 30.0;
     if(!node->send_goal(goal))
     {
@@ -141,8 +141,8 @@ int main(int argc, char *argv[])
     }
 
     // touch town
-    goal.position = {0.0, 0.0, 1.0};
-    goal.error_tolerance = 0.01;
+    goal.position = {0.0, 0.0, 0.9};
+    goal.error_tolerance = 0.2;
     goal.turn_off_motors_after_reach = true;
     if(!node->send_goal(goal))
     {

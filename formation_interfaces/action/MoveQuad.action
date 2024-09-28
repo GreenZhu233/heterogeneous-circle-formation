@@ -8,6 +8,7 @@ bool turn_off_motors_after_reach    # If true, the force will be stopped applyin
 ---
 # result
 float64[] final_position
+float64[] final_error
 ---
 # feedback
 float64[] current_position
