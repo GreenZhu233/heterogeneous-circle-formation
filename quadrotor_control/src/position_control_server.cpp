@@ -14,17 +14,11 @@
 
 struct IntegratedError
 {
-    double data[30];
     double sum;
-    int head;
-    int rear;
 
     IntegratedError()
     {
-        head = 1;
-        rear = 0;
         sum = 0;
-        memset(data, 0, sizeof(data));
     }
 
     double getvalue()
@@ -34,10 +28,14 @@ struct IntegratedError
 
     void push(double value)
     {
-        sum += value - data[head];
-        data[rear] = value;
-        rear = (rear + 1) % 30;
-        head = (head + 1) % 30;
+        if(sum * value < 0)
+        {
+            sum = value;
+        }
+        else
+        {
+            sum += value;
+        }
     }
 };
 
@@ -323,6 +321,7 @@ private:
             sim_time_ = this->sim_time.load();
         }
         result->final_position = current_pos;
+        result->final_error = error_pos;
         if(succeed)
         {
             RCLCPP_INFO(this->get_logger(), "Goal succeeded, total time: %g", sim_time_ - start_time);
