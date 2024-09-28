@@ -62,7 +62,12 @@ def generate_launch_description():
                      'tracking_target_odom_topic': '/rexrov_0/pose_gt',
                      'force_topic': 'gazebo_ros_force',
                      'action_service_name': 'position_control_action',
-                     'use_sim_time': True}]
+                     'use_sim_time': True},
+                     os.path.join(
+                         FindPackageShare('quadrotor_control').find('quadrotor_control'),
+                         'config',
+                         'pids.yaml'
+                     )]
     )
 
     # load a rexrov
