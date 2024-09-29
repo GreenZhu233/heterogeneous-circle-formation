@@ -25,14 +25,16 @@ def generate_launch_description():
     summon_quadrotors = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg, 'launch', 'summon_quadrotors.launch.py')
-        )
+        ),
+        launch_arguments={'num': '5', 'x_min': '5', 'x_max': '20', 'y_min': '0', 'y_max': '15', 'z': '0.3'}.items()
     )
 
     # summon diff_drive_robots
     summon_diff_drive_robots = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg, 'launch', 'summon_diff_drive_robots.launch.py')
-        )
+        ),
+        launch_arguments={'num': '5', 'x_min': '5', 'x_max': '20', 'y_min': '-15', 'y_max': '0', 'z': '0.3'}.items()
     )
 
     # start quadrotors formation
