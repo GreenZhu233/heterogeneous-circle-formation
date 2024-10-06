@@ -1,9 +1,8 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, ExecuteProcess
+from launch.actions import IncludeLaunchDescription, ExecuteProcess, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource, AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-from launch.substitutions import LaunchConfiguration
 import os
 import xacro
 
@@ -161,11 +160,11 @@ def generate_launch_description():
     ld.add_action(quad_robot_state_publisher)
     ld.add_action(quad_pos_controller)
     ld.add_action(spawn_quad)
-    ld.add_action(launch_rexrov)
-    ld.add_action(uuv_thruster_manager)
-    ld.add_action(uuv_accel_control)
-    ld.add_action(uuv_vel_control)
-    ld.add_action(uuv_pos_control)
-    ld.add_action(quadrotor_landing_node)
+    ld.add_action(TimerAction(period=3.0, actions=[launch_rexrov,
+                                                   uuv_thruster_manager,
+                                                   uuv_accel_control,
+                                                   uuv_vel_control,
+                                                   uuv_pos_control,
+                                                   quadrotor_landing_node]))
 
     return ld
