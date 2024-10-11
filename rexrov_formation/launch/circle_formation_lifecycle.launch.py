@@ -9,11 +9,11 @@ import os
 def generate_launch_description():
     ld = LaunchDescription()
     ld.add_action(DeclareLaunchArgument('num', default_value='5', description='Number of quadrotors'))
-    ld.add_action(DeclareLaunchArgument('x_min', default_value='-20', description='Minimum x value for spawn position'))
-    ld.add_action(DeclareLaunchArgument('x_max', default_value='20', description='Maximum x value for spawn position'))
-    ld.add_action(DeclareLaunchArgument('y_min', default_value='-20', description='Minimum y value for spawn position'))
-    ld.add_action(DeclareLaunchArgument('y_max', default_value='20', description='Maximum y value for spawn position'))
-    ld.add_action(DeclareLaunchArgument('z', default_value='-1.0', description='Spawn height'))
+    ld.add_action(DeclareLaunchArgument('x_min', default_value='-25', description='Minimum x value for spawn position'))
+    ld.add_action(DeclareLaunchArgument('x_max', default_value='25', description='Maximum x value for spawn position'))
+    ld.add_action(DeclareLaunchArgument('y_min', default_value='-25', description='Minimum y value for spawn position'))
+    ld.add_action(DeclareLaunchArgument('y_max', default_value='25', description='Maximum y value for spawn position'))
+    ld.add_action(DeclareLaunchArgument('z', default_value='-5', description='Spawn height'))
 
     # start gazebo world
     gazebo_world = ExecuteProcess(
@@ -27,7 +27,7 @@ def generate_launch_description():
             os.path.join(
                 FindPackageShare('rexrov_formation').find('rexrov_formation'),
                 'launch',
-                'summon_rexrov_with_velocity_control.launch.py'
+                'summon_rexrov_with_acceleration_control.launch.py'
             )
         ),
         launch_arguments={
@@ -42,6 +42,7 @@ def generate_launch_description():
 
     # formation_node
     formation_node = Node(
+        name='rexrov_formation_lifecycle_node',
         package='rexrov_formation',
         executable='circle_formation_lifecycle_node',
         output='screen',
@@ -49,14 +50,29 @@ def generate_launch_description():
             {'num': LaunchConfiguration('num'),
              'center_x': 0.0,
              'center_y': 0.0,
-             'center_z': -0.7,
-             'radius': 6.0},
+             'center_z': -5.0,
+             'radius': 15.0,
+             'use_sim_time': True},
             FindPackageShare('rexrov_formation').find('rexrov_formation') + '/config/formation_param.yaml'
         ]
     )
 
+    # configure formation node
+    config_formation = ExecuteProcess(
+        cmd=['ros2', 'lifecycle', 'set', '/rexrov_formation_lifecycle_node', 'configure'],
+        output='screen'
+    )
+
+    # activate formation node
+    activate_formation = ExecuteProcess(
+        cmd=['ros2', 'lifecycle', 'set', '/rexrov_formation_lifecycle_node', 'activate'],
+        output='screen'
+    )
+
     ld.add_action(gazebo_world)
+    ld.add_action(formation_node)
     ld.add_action(TimerAction(period=3.0, actions=[rexrov_launch]))
-    ld.add_action(TimerAction(period=5.0, actions=[formation_node]))
+    ld.add_action(TimerAction(period=10.0, actions=[config_formation]))
+    ld.add_action(TimerAction(period=15.0, actions=[activate_formation]))
 
     return ld

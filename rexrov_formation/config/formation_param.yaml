@@ -1,7 +1,12 @@
 /rexrov_formation_lifecycle_node:
   ros__parameters:
-    Lambda: 0.7
+    Lambda: 0.5
     Gamma: 0.01
     C1: 0.4
-    C2: 1.0
-    rot_p: 5.0
+    C2: 4.0
+    rot_p: 50.0
+    rot_d: 10.0
+    linear_p: 10.0
+    linear_d: 0.1
+    linear_i: 1.0
+    linear_sat: 20.0
