@@ -1,13 +1,12 @@
 import launch
 from launch import LaunchDescription
-from launch_ros.actions import Node
+from launch_ros.actions import Node, LifecycleNode
 from launch_ros.substitutions import FindPackageShare
 from launch.actions import IncludeLaunchDescription, TimerAction, ExecuteProcess
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
-from launch_ros.actions import LifecycleNode
 from launch_ros.event_handlers import OnStateTransition
-from launch.actions import EmitEvent
+from launch.actions import EmitEvent, RegisterEventHandler
 from launch_ros.events.lifecycle import ChangeState
 from lifecycle_msgs.msg import Transition
 
@@ -63,7 +62,7 @@ def generate_launch_description():
     )
 
     # start quadrotors formation
-    quadrotor_formation = Node(
+    quadrotor_formation = LifecycleNode(
         name='quadrotor_formation_lifecycle_node',
         namespace='/',
         package='quadrotor_formation',
@@ -81,8 +80,9 @@ def generate_launch_description():
     )
 
     # start rexrovs formation
-    rexrov_formation = Node(
+    rexrov_formation = LifecycleNode(
         name='rexrov_formation_lifecycle_node',
+        namespace='/',
         package='rexrov_formation',
         executable='circle_formation_lifecycle_node',
         output='screen',
@@ -99,27 +99,51 @@ def generate_launch_description():
 
 
     # configure quadrotors formation
-    config_quadrotor_formation = ExecuteProcess(
-        cmd=['ros2', 'lifecycle', 'set', '/quadrotor_formation_lifecycle_node', 'configure'],
-        output='screen'
+    configure_quadrotor_formation = EmitEvent(
+        event=ChangeState(
+            lifecycle_node_matcher=launch.events.matches_action(quadrotor_formation),
+            transition_id=Transition.TRANSITION_CONFIGURE
+        )
     )
 
     # activate quadrotors formation
-    act_quadrotor_formation = ExecuteProcess(
-        cmd=['ros2', 'lifecycle', 'set', '/quadrotor_formation_lifecycle_node', 'activate'],
-        output='screen'
+    activate_quadrotor_formation = RegisterEventHandler(
+        OnStateTransition(
+            target_lifecycle_node=quadrotor_formation,
+            goal_state='inactive',
+            entities=[
+                EmitEvent(
+                    event=ChangeState(
+                        lifecycle_node_matcher=launch.events.matches_action(quadrotor_formation),
+                        transition_id=Transition.TRANSITION_ACTIVATE
+                    )
+                )
+            ]
+        )
     )
 
     # configure rexrovs formation
-    config_rexrov_formation = ExecuteProcess(
-        cmd=['ros2', 'lifecycle', 'set', '/rexrov_formation_lifecycle_node', 'configure'],
-        output='screen'
+    configure_rexrov_formation = EmitEvent(
+        event=ChangeState(
+            lifecycle_node_matcher=launch.events.matches_action(rexrov_formation),
+            transition_id=Transition.TRANSITION_CONFIGURE
+        )
     )
 
     # activate rexrovs formation
-    act_rexrov_formation = ExecuteProcess(
-        cmd=['ros2', 'lifecycle', 'set', '/rexrov_formation_lifecycle_node', 'activate'],
-        output='screen'
+    activate_rexrov_formation = RegisterEventHandler(
+        OnStateTransition(
+            target_lifecycle_node=rexrov_formation,
+            goal_state='inactive',
+            entities=[
+                EmitEvent(
+                    event=ChangeState(
+                        lifecycle_node_matcher=launch.events.matches_action(rexrov_formation),
+                        transition_id=Transition.TRANSITION_ACTIVATE
+                    )
+                )
+            ]
+        )
     )
 
     ld.add_action(gazebo_world)
@@ -131,12 +155,12 @@ def generate_launch_description():
         rexrov_formation
     ]))
     ld.add_action(TimerAction(period=10.0, actions=[
-        config_quadrotor_formation,
-        config_rexrov_formation
+        activate_quadrotor_formation,
+        activate_rexrov_formation,
     ]))
     ld.add_action(TimerAction(period=14.0, actions=[
-        act_quadrotor_formation,
-        act_rexrov_formation,
+        configure_quadrotor_formation,
+        configure_rexrov_formation,
         diff_drive_formation
     ]))
 
