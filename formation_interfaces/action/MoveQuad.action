@@ -2,6 +2,7 @@
 float64[] position                  # x, y, z position
 bool is_relative_to_self            # If true, the goal position is relative to the current position
 bool is_relative_to_target          # If true, the goal position is relative to the tracking target
+string target_odom_topic            # The topic of the target odometry
 float64 time_limit                  # Time limit to reach the goal
 float64 error_tolerance             # The error tolerance for the goal position
 bool turn_off_motors_after_reach    # If true, the force will be stopped applying after reaching the goal position

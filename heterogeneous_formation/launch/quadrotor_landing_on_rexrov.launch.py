@@ -58,7 +58,6 @@ def generate_launch_description():
         executable='position_control_server',
         namespace='quad_0',
         parameters=[{'self_odom_topic': 'odom',
-                     'tracking_target_odom_topic': '/rexrov_0/pose_gt',
                      'force_topic': 'gazebo_ros_force',
                      'action_service_name': 'position_control_action',
                      'use_sim_time': True},

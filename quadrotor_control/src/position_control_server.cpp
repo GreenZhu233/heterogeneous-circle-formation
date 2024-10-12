@@ -51,7 +51,6 @@ public:
         using namespace std::placeholders;
         this->declare_parameter("G", 1.316*9.8);
         this->declare_parameter("self_odom_topic", "odom");
-        this->declare_parameter("tracking_target_odom_topic", "");
         this->declare_parameter("force_topic", "gazebo_ros_force");
         this->declare_parameter("action_service_name", "position_control_action");
         this->declare_parameter("pos_p", 1.0);
@@ -69,7 +68,6 @@ public:
         this->rot_p = this->get_parameter("rot_p").as_double_array();
         this->rot_d = this->get_parameter("rot_d").as_double_array();
         std::string self_odom_topic = this->get_parameter("self_odom_topic").as_string();
-        std::string tracking_target_odom_topic = this->get_parameter("tracking_target_odom_topic").as_string();
         std::string force_topic = this->get_parameter("force_topic").as_string();
         std::string action_service_name = this->get_parameter("action_service_name").as_string();
         this->action_server = rclcpp_action::create_server<MoveQuad>(
@@ -89,17 +87,6 @@ public:
             std::bind(&PositionControlServer::self_odom_callback, this, _1),
             sub_options
         );
-
-        if(tracking_target_odom_topic != "")
-        {
-            this->tracking_target_odom_sub = this->create_subscription<nav_msgs::msg::Odometry>(
-                tracking_target_odom_topic,
-                10,
-                std::bind(&PositionControlServer::tracking_target_odom_callback, this, _1),
-                sub_options
-            );
-        }
-        else this->tracking_target_odom_sub = nullptr;
 
         this->force_pub = this->create_publisher<geometry_msgs::msg::Wrench>(
             force_topic,
@@ -184,11 +171,16 @@ private:
         }
         else if(goal->is_relative_to_target)
         {
-            if(tracking_target_odom_sub == nullptr)
+            if(goal->target_odom_topic == "")
             {
-                RCLCPP_ERROR(this->get_logger(), "No tracking target is set");
+                RCLCPP_ERROR(this->get_logger(), "No target is provided");
                 return rclcpp_action::GoalResponse::REJECT;
             }
+            tracking_target_odom_sub = create_subscription<nav_msgs::msg::Odometry>(
+                goal->target_odom_topic,
+                10,
+                std::bind(&PositionControlServer::tracking_target_odom_callback, this, std::placeholders::_1)
+            );
             RCLCPP_INFO(this->get_logger(), "Received goal position request at x=^%g, y=^%g, z=^%g", goal->position[0], goal->position[1], goal->position[2]);
         }
         else
@@ -347,6 +339,7 @@ private:
             hovering.store(true);
         }
         hovering_thread = std::make_unique<std::thread>(&PositionControlServer::hover, this);
+        if(goal->is_relative_to_target) tracking_target_odom_sub.reset();
     }
 
     void translation_pid(const std::vector<double> &error,

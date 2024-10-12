@@ -127,6 +127,7 @@ int main(int argc, char *argv[])
     goal.position = {0.0, 0.0, 4.0};
     goal.is_relative_to_self = false;
     goal.is_relative_to_target = true;
+    goal.target_odom_topic = node->get_parameter("uuv_odom_topic").as_string();
     goal.error_tolerance = 0.3;
     goal.time_limit = 30.0;
     if(!node->send_goal(goal))
