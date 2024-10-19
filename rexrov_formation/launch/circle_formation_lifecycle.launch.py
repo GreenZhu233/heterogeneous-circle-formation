@@ -13,7 +13,7 @@ def generate_launch_description():
     ld.add_action(DeclareLaunchArgument('x_max', default_value='25', description='Maximum x value for spawn position'))
     ld.add_action(DeclareLaunchArgument('y_min', default_value='-25', description='Minimum y value for spawn position'))
     ld.add_action(DeclareLaunchArgument('y_max', default_value='25', description='Maximum y value for spawn position'))
-    ld.add_action(DeclareLaunchArgument('z', default_value='-5', description='Spawn height'))
+    ld.add_action(DeclareLaunchArgument('z', default_value='-1', description='Spawn height'))
 
     # start gazebo world
     gazebo_world = ExecuteProcess(
@@ -50,7 +50,7 @@ def generate_launch_description():
             {'num': LaunchConfiguration('num'),
              'center_x': 0.0,
              'center_y': 0.0,
-             'center_z': -5.0,
+             'center_z': -0.7,
              'radius': 15.0,
              'use_sim_time': True},
             FindPackageShare('rexrov_formation').find('rexrov_formation') + '/config/formation_param.yaml'
