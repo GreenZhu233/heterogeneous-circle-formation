@@ -355,6 +355,8 @@ private:
         for(int i = 0; i < 3; i++)
         {
             force[i] = pos_p * error[i] + pos_d * (error[i] - prev_error[i]) / dt + pos_i * integrated_error[i].getvalue();
+            if(force[i] > 10.0) force[i] = 10.0;
+            else if(force[i] < -10.0) force[i] = -10.0;
             integrated_error[i].push(error[i] * dt);
             prev_error[i] = error[i];
         }
