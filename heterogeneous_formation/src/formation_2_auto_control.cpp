@@ -188,17 +188,16 @@ int main(int argc, char *argv[])
     }
 
     // set parameters
-    double new_radius = (node->quad_radius + node->uuv_radius) / 2;
     std::vector<rclcpp::Parameter> parameters;
-    parameters.push_back(rclcpp::Parameter("C1", node->uuv_C1));
+    parameters.push_back(rclcpp::Parameter("C1", 0.2));
     parameters.push_back(rclcpp::Parameter("C2", node->uuv_C2));
     parameters.push_back(rclcpp::Parameter("Lambda", node->uuv_Lambda));
     parameters.push_back(rclcpp::Parameter("Gamma", node->uuv_Gamma));
-    parameters.push_back(rclcpp::Parameter("radius", new_radius));
     auto set_parameters_future = node->quad_param_client->set_parameters(parameters);
     rclcpp::spin_until_future_complete(node, set_parameters_future);
     parameters.clear();
-    parameters.push_back(rclcpp::Parameter("radius", new_radius));
+    parameters.push_back(rclcpp::Parameter("C1", 0.2));
+    parameters.push_back(rclcpp::Parameter("radius", node->quad_radius));
     set_parameters_future = node->uuv_param_client->set_parameters(parameters);
     rclcpp::spin_until_future_complete(node, set_parameters_future);
     sleep(10.0);
@@ -221,9 +220,9 @@ int main(int argc, char *argv[])
 
     // steer quadrotors to land on the UUVs
     auto goal = MoveQuad::Goal();
-    goal.position = {0.0, 0.0, 4.0};
     goal.is_relative_to_self = false;
     goal.is_relative_to_target = true;
+    goal.position = {0.0, 0.0, 4.0};
     goal.error_tolerance = 0.3;
     goal.time_limit = 10.0;
     goal.turn_off_motors_after_reach = false;
@@ -251,12 +250,13 @@ int main(int argc, char *argv[])
     {
         rclcpp::spin_some(node);
     }
-    sleep(5.0);
+    sleep(10.0);
 
     // relaunch quadrotors
     change_state_request->transition.id = lifecycle_msgs::msg::Transition::TRANSITION_ACTIVATE;
     auto activate_future = lifecycle_client->async_send_request(change_state_request);
     rclcpp::spin_until_future_complete(node, activate_future);
+    sleep(1.0);
 
     // reset parameters
     parameters.clear();
@@ -268,6 +268,7 @@ int main(int argc, char *argv[])
     set_parameters_future = node->quad_param_client->set_parameters(parameters);
     rclcpp::spin_until_future_complete(node, set_parameters_future);
     parameters.clear();
+    parameters.push_back(rclcpp::Parameter("C1", node->uuv_C1));
     parameters.push_back(rclcpp::Parameter("radius", node->uuv_radius));
     set_parameters_future = node->uuv_param_client->set_parameters(parameters);
     rclcpp::spin_until_future_complete(node, set_parameters_future);
