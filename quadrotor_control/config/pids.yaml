@@ -12,3 +12,63 @@
     - 0.04
     - 0.04
     - 0.08
+
+/quad_1/position_control_server:
+  ros__parameters:
+    G: 12.8968
+    pos_d: 2.5
+    pos_i: 0.05
+    pos_p: 1.0
+    rot_d:
+    - 0.1
+    - 0.1
+    - 0.2
+    rot_p:
+    - 0.04
+    - 0.04
+    - 0.08
+
+/quad_2/position_control_server:
+  ros__parameters:
+    G: 12.8968
+    pos_d: 2.5
+    pos_i: 0.05
+    pos_p: 1.0
+    rot_d:
+    - 0.1
+    - 0.1
+    - 0.2
+    rot_p:
+    - 0.04
+    - 0.04
+    - 0.08
+
+/quad_3/position_control_server:
+  ros__parameters:
+    G: 12.8968
+    pos_d: 2.5
+    pos_i: 0.05
+    pos_p: 1.0
+    rot_d:
+    - 0.1
+    - 0.1
+    - 0.2
+    rot_p:
+    - 0.04
+    - 0.04
+    - 0.08
+
+/quad_4/position_control_server:
+  ros__parameters:
+    G: 12.8968
+    pos_d: 2.5
+    pos_i: 0.05
+    pos_p: 1.0
+    rot_d:
+    - 0.1
+    - 0.1
+    - 0.2
+    rot_p:
+    - 0.04
+    - 0.04
+    - 0.08
