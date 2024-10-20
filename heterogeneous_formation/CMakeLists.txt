@@ -12,7 +12,8 @@ find_package(rclcpp REQUIRED)
 find_package(formation_gazebo_worlds REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(nav_msgs REQUIRED)
-
+find_package(rcl_interfaces REQUIRED)
+find_package(lifecycle_msgs REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -34,6 +35,16 @@ ament_target_dependencies(quadrotor_landing
   nav_msgs
 )
 
+add_executable(formation_2_auto_control_node src/formation_2_auto_control.cpp)
+ament_target_dependencies(formation_2_auto_control_node
+  rclcpp
+  rclcpp_action
+  formation_interfaces
+  nav_msgs
+  rcl_interfaces
+  lifecycle_msgs
+)
+
 ament_package()
 
 install(
@@ -45,5 +56,6 @@ install(
 install(
   TARGETS
     quadrotor_landing
+    formation_2_auto_control_node
   DESTINATION lib/${PROJECT_NAME}
 )
